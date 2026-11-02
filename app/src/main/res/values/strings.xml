@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Mon Budget</string>
+
+    <string name="salary">Salaire du mois</string>
+    <string name="available">Disponible</string>
+    <string name="available_hint">salaire − charges fixes</string>
+    <string name="balance">Solde restant</string>
+    <string name="balance_hint">après les dépenses ponctuelles</string>
+
+    <string name="fixed_title">Charges fixes</string>
+    <string name="punctual_title">Dépenses ponctuelles</string>
+    <string name="add_fixed">+ Ajouter une charge fixe</string>
+    <string name="add_punctual">+ Ajouter une dépense</string>
+    <string name="none_fixed">Aucune charge fixe pour ce mois.</string>
+    <string name="none_punctual">Aucune dépense ponctuelle pour ce mois.</string>
+
+    <string name="label_hint">Libellé (ex. Freebox)</string>
+    <string name="amount_hint">Montant (€)</string>
+    <string name="date_label">Date</string>
+
+    <string name="dlg_new_fixed">Nouvelle charge fixe</string>
+    <string name="dlg_edit_fixed">Modifier la charge fixe</string>
+    <string name="dlg_new_punctual">Nouvelle dépense</string>
+    <string name="dlg_edit_punctual">Modifier la dépense</string>
+    <string name="dlg_salary">Salaire du mois</string>
+
+    <string name="save">Enregistrer</string>
+    <string name="cancel">Annuler</string>
+    <string name="delete">Supprimer</string>
+    <string name="delete_confirm_title">Supprimer ?</string>
+    <string name="delete_confirm_msg">Cette ligne sera définitivement supprimée.</string>
+
+    <string name="paid">payé</string>
+    <string name="err_label">Indiquez un libellé.</string>
+    <string name="err_amount">Indiquez un montant valide.</string>
+</resources>
