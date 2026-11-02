@@ -64,6 +64,10 @@ class MainActivity : AppCompatActivity() {
 
         val now = Calendar.getInstance()
         currentKey = keyOf(now.get(Calendar.YEAR), now.get(Calendar.MONTH))
+        // Premier lancement : pré-remplir les charges fixes d'après la liste fournie.
+        if (store.existingKeys().isEmpty()) {
+            store.save(currentKey, Seed.initialMonth())
+        }
         data = loadOrCarry(currentKey)
         render()
     }
