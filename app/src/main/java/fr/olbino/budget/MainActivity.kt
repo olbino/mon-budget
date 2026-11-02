@@ -144,7 +144,7 @@ class MainActivity : AppCompatActivity() {
         }
         val overBudget = data.balance < 0
         val fillColor = ContextCompat.getColor(this, if (overBudget) R.color.negative else android.R.color.white)
-        (progressFill.background as? GradientDrawable)?.mutate()?.setColor(fillColor)
+        (progressFill.background.mutate() as? GradientDrawable)?.setColor(fillColor)
 
         animateBalance(data.balance)
         animateProgress(percent)
