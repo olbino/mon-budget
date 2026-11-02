@@ -2,16 +2,16 @@
 <resources>
     <string name="app_name">Mon Budget</string>
 
-    <string name="salary">Salaire du mois</string>
+    <string name="salary">Salaire</string>
     <string name="available">Disponible</string>
-    <string name="available_hint">salaire − charges fixes</string>
     <string name="balance">Solde restant</string>
-    <string name="balance_hint">après les dépenses ponctuelles</string>
+    <string name="spent_of">%1$s engagés sur %2$s</string>
+    <string name="paid_count">%1$d / %2$d payées</string>
 
     <string name="fixed_title">Charges fixes</string>
     <string name="punctual_title">Dépenses ponctuelles</string>
-    <string name="add_fixed">+ Ajouter une charge fixe</string>
-    <string name="add_punctual">+ Ajouter une dépense</string>
+    <string name="add_fixed">Ajouter une charge fixe</string>
+    <string name="add_punctual">Ajouter une dépense</string>
     <string name="none_fixed">Aucune charge fixe pour ce mois.</string>
     <string name="none_punctual">Aucune dépense ponctuelle pour ce mois.</string>
 
@@ -31,7 +31,6 @@
     <string name="delete_confirm_title">Supprimer ?</string>
     <string name="delete_confirm_msg">Cette ligne sera définitivement supprimée.</string>
 
-    <string name="paid">payé</string>
     <string name="err_label">Indiquez un libellé.</string>
     <string name="err_amount">Indiquez un montant valide.</string>
 </resources>

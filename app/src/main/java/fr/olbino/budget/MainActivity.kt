@@ -1,10 +1,11 @@
 package fr.olbino.budget
 
+import android.animation.ValueAnimator
 import android.app.DatePickerDialog
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
-import android.view.ViewGroup
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
@@ -13,6 +14,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import android.view.animation.DecelerateInterpolator
 import java.text.NumberFormat
 import java.util.Calendar
 import java.util.Locale
@@ -20,7 +23,7 @@ import java.util.Locale
 class MainActivity : AppCompatActivity() {
 
     private lateinit var store: Store
-    private lateinit var currentKey: String       // "yyyy-MM"
+    private lateinit var currentKey: String
     private lateinit var data: MonthData
 
     private val monthNames = arrayOf(
@@ -28,17 +31,26 @@ class MainActivity : AppCompatActivity() {
         "juillet", "août", "septembre", "octobre", "novembre", "décembre"
     )
 
-    // Vues
     private lateinit var monthLabel: TextView
+    private lateinit var balanceValue: TextView
     private lateinit var salaryValue: TextView
     private lateinit var availableValue: TextView
-    private lateinit var balanceValue: TextView
     private lateinit var fixedTotal: TextView
+    private lateinit var fixedCount: TextView
     private lateinit var punctualTotal: TextView
     private lateinit var fixedContainer: LinearLayout
     private lateinit var punctualContainer: LinearLayout
     private lateinit var fixedEmpty: TextView
     private lateinit var punctualEmpty: TextView
+    private lateinit var progressTrack: LinearLayout
+    private lateinit var progressFill: View
+    private lateinit var progressSpace: View
+    private lateinit var spentLabel: TextView
+
+    private var shownBalance = 0.0
+    private var shownPercent = 0f
+    private var balanceAnimator: ValueAnimator? = null
+    private var progressAnimator: ValueAnimator? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,25 +58,29 @@ class MainActivity : AppCompatActivity() {
         store = Store(this)
 
         monthLabel = findViewById(R.id.monthLabel)
+        balanceValue = findViewById(R.id.balanceValue)
         salaryValue = findViewById(R.id.salaryValue)
         availableValue = findViewById(R.id.availableValue)
-        balanceValue = findViewById(R.id.balanceValue)
         fixedTotal = findViewById(R.id.fixedTotal)
+        fixedCount = findViewById(R.id.fixedCount)
         punctualTotal = findViewById(R.id.punctualTotal)
         fixedContainer = findViewById(R.id.fixedContainer)
         punctualContainer = findViewById(R.id.punctualContainer)
         fixedEmpty = findViewById(R.id.fixedEmpty)
         punctualEmpty = findViewById(R.id.punctualEmpty)
+        progressTrack = findViewById(R.id.progressTrack)
+        progressFill = findViewById(R.id.progressFill)
+        progressSpace = findViewById(R.id.progressSpace)
+        spentLabel = findViewById(R.id.spentLabel)
 
-        findViewById<Button>(R.id.prevMonth).setOnClickListener { shiftMonth(-1) }
-        findViewById<Button>(R.id.nextMonth).setOnClickListener { shiftMonth(1) }
-        findViewById<View>(R.id.salaryRow).setOnClickListener { editSalary() }
+        findViewById<View>(R.id.prevMonth).setOnClickListener { shiftMonth(-1) }
+        findViewById<View>(R.id.nextMonth).setOnClickListener { shiftMonth(1) }
+        findViewById<View>(R.id.salaryStat).setOnClickListener { editSalary() }
         findViewById<Button>(R.id.addFixed).setOnClickListener { addFixed() }
         findViewById<Button>(R.id.addPunctual).setOnClickListener { addPunctual() }
 
         val now = Calendar.getInstance()
         currentKey = keyOf(now.get(Calendar.YEAR), now.get(Calendar.MONTH))
-        // Premier lancement : pré-remplir les charges fixes d'après la liste fournie.
         if (store.existingKeys().isEmpty()) {
             store.save(currentKey, Seed.initialMonth())
         }
@@ -89,7 +105,6 @@ class MainActivity : AppCompatActivity() {
         render()
     }
 
-    /** Charge le mois, sinon le crée en reprenant les charges fixes du mois le plus proche. */
     private fun loadOrCarry(key: String): MonthData {
         store.load(key)?.let { return it }
         val keys = store.existingKeys()
@@ -105,9 +120,7 @@ class MainActivity : AppCompatActivity() {
         return d
     }
 
-    private fun persist() {
-        store.save(currentKey, data)
-    }
+    private fun persist() = store.save(currentKey, data)
 
     // ---------- Affichage ----------
 
@@ -115,20 +128,69 @@ class MainActivity : AppCompatActivity() {
         monthLabel.text = "${monthNames[month0Of(currentKey)].replaceFirstChar { it.uppercase() }} ${yearOf(currentKey)}"
         salaryValue.text = money(data.salary)
         availableValue.text = money(data.available)
-        balanceValue.text = money(data.balance)
-        balanceValue.setTextColor(getColor(if (data.balance < 0) R.color.negative else R.color.positive))
         fixedTotal.text = money(data.totalFixed)
         punctualTotal.text = money(data.totalPunctual)
 
+        val paid = data.fixed.count { it.paid }
+        fixedCount.text = String.format(Locale.FRANCE, "%d / %d payées", paid, data.fixed.size)
+
+        val spent = data.totalFixed + data.totalPunctual
+        spentLabel.text = getString(R.string.spent_of, money(spent), money(data.salary))
+
+        val percent = when {
+            data.salary > 0 -> (spent / data.salary * 100.0).coerceIn(0.0, 100.0).toFloat()
+            spent > 0 -> 100f
+            else -> 0f
+        }
+        val overBudget = data.balance < 0
+        val fillColor = ContextCompat.getColor(this, if (overBudget) R.color.negative else android.R.color.white)
+        (progressFill.background as? GradientDrawable)?.mutate()?.setColor(fillColor)
+
+        animateBalance(data.balance)
+        animateProgress(percent)
+
         renderFixed()
         renderPunctual()
+    }
+
+    private fun animateBalance(target: Double) {
+        balanceAnimator?.cancel()
+        val start = shownBalance
+        if (start == target) { balanceValue.text = money(target); return }
+        balanceAnimator = ValueAnimator.ofFloat(start.toFloat(), target.toFloat()).apply {
+            duration = 500
+            interpolator = DecelerateInterpolator()
+            addUpdateListener {
+                val v = (it.animatedValue as Float).toDouble()
+                balanceValue.text = money(v)
+            }
+            start()
+        }
+        shownBalance = target
+    }
+
+    private fun animateProgress(target: Float) {
+        progressAnimator?.cancel()
+        val start = shownPercent
+        progressAnimator = ValueAnimator.ofFloat(start, target).apply {
+            duration = 550
+            interpolator = DecelerateInterpolator()
+            addUpdateListener {
+                val p = it.animatedValue as Float
+                (progressFill.layoutParams as LinearLayout.LayoutParams).weight = p
+                (progressSpace.layoutParams as LinearLayout.LayoutParams).weight = 100f - p
+                progressTrack.requestLayout()
+            }
+            start()
+        }
+        shownPercent = target
     }
 
     private fun renderFixed() {
         fixedContainer.removeAllViews()
         fixedEmpty.visibility = if (data.fixed.isEmpty()) View.VISIBLE else View.GONE
         val inflater = LayoutInflater.from(this)
-        for (f in data.fixed) {
+        data.fixed.forEachIndexed { index, f ->
             val row = inflater.inflate(R.layout.row_fixed, fixedContainer, false)
             val check = row.findViewById<CheckBox>(R.id.paidCheck)
             val labelText = row.findViewById<TextView>(R.id.labelText)
@@ -142,21 +204,24 @@ class MainActivity : AppCompatActivity() {
                 f.paid = isChecked
                 applyPaidStyle(labelText, amountText, isChecked)
                 persist()
+                val paid = data.fixed.count { it.paid }
+                fixedCount.text = String.format(Locale.FRANCE, "%d / %d payées", paid, data.fixed.size)
             }
             row.findViewById<View>(R.id.rowBody).setOnClickListener { editFixed(f) }
+            row.findViewById<View>(R.id.divider).visibility =
+                if (index == data.fixed.lastIndex) View.GONE else View.VISIBLE
             fixedContainer.addView(row)
         }
     }
 
     private fun applyPaidStyle(label: TextView, amount: TextView, paid: Boolean) {
-        val color = getColor(if (paid) R.color.text_muted else R.color.text)
+        val color = ContextCompat.getColor(this, if (paid) R.color.text_muted else R.color.text)
         label.setTextColor(color)
         amount.setTextColor(color)
-        val flags = if (paid)
+        label.paintFlags = if (paid)
             label.paintFlags or android.graphics.Paint.STRIKE_THRU_TEXT_FLAG
         else
             label.paintFlags and android.graphics.Paint.STRIKE_THRU_TEXT_FLAG.inv()
-        label.paintFlags = flags
     }
 
     private fun renderPunctual() {
@@ -164,12 +229,14 @@ class MainActivity : AppCompatActivity() {
         punctualEmpty.visibility = if (data.punctual.isEmpty()) View.VISIBLE else View.GONE
         val inflater = LayoutInflater.from(this)
         val sorted = data.punctual.sortedBy { it.date }
-        for (p in sorted) {
+        sorted.forEachIndexed { index, p ->
             val row = inflater.inflate(R.layout.row_punctual, punctualContainer, false)
             row.findViewById<TextView>(R.id.dateText).text = shortDate(p.date)
             row.findViewById<TextView>(R.id.labelText).text = p.label
             row.findViewById<TextView>(R.id.amountText).text = "-" + money(p.amount)
             row.findViewById<View>(R.id.rowBody).setOnClickListener { editPunctual(p) }
+            row.findViewById<View>(R.id.divider).visibility =
+                if (index == sorted.lastIndex) View.GONE else View.VISIBLE
             punctualContainer.addView(row)
         }
     }
@@ -190,13 +257,8 @@ class MainActivity : AppCompatActivity() {
             .setView(wrap)
             .setPositiveButton(R.string.save) { _, _ ->
                 val v = parseAmount(input.text.toString())
-                if (v == null) {
-                    toast(R.string.err_amount)
-                } else {
-                    data.salary = v
-                    persist()
-                    render()
-                }
+                if (v == null) toast(R.string.err_amount)
+                else { data.salary = v; persist(); render() }
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
@@ -205,59 +267,34 @@ class MainActivity : AppCompatActivity() {
     // ---------- Charges fixes ----------
 
     private fun addFixed() {
-        showItemDialog(
-            titleRes = R.string.dlg_new_fixed,
-            label = "", amount = null, withDate = false, dateKey = null,
+        showItemDialog(R.string.dlg_new_fixed, "", null, false, null,
             onSave = { label, amount, _ ->
-                data.fixed.add(FixedCharge(label = label, amount = amount))
-                persist(); render()
-            },
-            onDelete = null
-        )
+                data.fixed.add(FixedCharge(label = label, amount = amount)); persist(); render()
+            }, onDelete = null)
     }
 
     private fun editFixed(f: FixedCharge) {
-        showItemDialog(
-            titleRes = R.string.dlg_edit_fixed,
-            label = f.label, amount = f.amount, withDate = false, dateKey = null,
-            onSave = { label, amount, _ ->
-                f.label = label; f.amount = amount
-                persist(); render()
-            },
-            onDelete = {
-                data.fixed.remove(f)
-                persist(); render()
-            }
-        )
+        showItemDialog(R.string.dlg_edit_fixed, f.label, f.amount, false, null,
+            onSave = { label, amount, _ -> f.label = label; f.amount = amount; persist(); render() },
+            onDelete = { data.fixed.remove(f); persist(); render() })
     }
 
     // ---------- Dépenses ponctuelles ----------
 
     private fun addPunctual() {
-        showItemDialog(
-            titleRes = R.string.dlg_new_punctual,
-            label = "", amount = null, withDate = true, dateKey = defaultDateForMonth(),
+        showItemDialog(R.string.dlg_new_punctual, "", null, true, defaultDateForMonth(),
             onSave = { label, amount, date ->
                 data.punctual.add(Punctual(label = label, amount = amount, date = date ?: defaultDateForMonth()))
                 persist(); render()
-            },
-            onDelete = null
-        )
+            }, onDelete = null)
     }
 
     private fun editPunctual(p: Punctual) {
-        showItemDialog(
-            titleRes = R.string.dlg_edit_punctual,
-            label = p.label, amount = p.amount, withDate = true, dateKey = p.date,
+        showItemDialog(R.string.dlg_edit_punctual, p.label, p.amount, true, p.date,
             onSave = { label, amount, date ->
-                p.label = label; p.amount = amount; if (date != null) p.date = date
-                persist(); render()
+                p.label = label; p.amount = amount; if (date != null) p.date = date; persist(); render()
             },
-            onDelete = {
-                data.punctual.remove(p)
-                persist(); render()
-            }
-        )
+            onDelete = { data.punctual.remove(p); persist(); render() })
     }
 
     // ---------- Boîte de dialogue générique ----------
@@ -287,14 +324,9 @@ class MainActivity : AppCompatActivity() {
             chosen.set(d.substring(0, 4).toInt(), d.substring(5, 7).toInt() - 1, d.substring(8, 10).toInt())
             dateButton.text = longDate(chosen)
             dateButton.setOnClickListener {
-                DatePickerDialog(
-                    this,
-                    { _, y, m, day ->
-                        chosen.set(y, m, day)
-                        dateButton.text = longDate(chosen)
-                    },
-                    chosen.get(Calendar.YEAR), chosen.get(Calendar.MONTH), chosen.get(Calendar.DAY_OF_MONTH)
-                ).show()
+                DatePickerDialog(this, { _, y, m, day ->
+                    chosen.set(y, m, day); dateButton.text = longDate(chosen)
+                }, chosen.get(Calendar.YEAR), chosen.get(Calendar.MONTH), chosen.get(Calendar.DAY_OF_MONTH)).show()
             }
         }
 
@@ -303,9 +335,7 @@ class MainActivity : AppCompatActivity() {
             .setView(view)
             .setPositiveButton(R.string.save, null)
             .setNegativeButton(R.string.cancel, null)
-        if (onDelete != null) {
-            builder.setNeutralButton(R.string.delete, null)
-        }
+        if (onDelete != null) builder.setNeutralButton(R.string.delete, null)
         val dialog = builder.create()
         dialog.show()
 
@@ -314,8 +344,7 @@ class MainActivity : AppCompatActivity() {
             val amt = parseAmount(amountInput.text.toString())
             if (lbl.isEmpty()) { toast(R.string.err_label); return@setOnClickListener }
             if (amt == null) { toast(R.string.err_amount); return@setOnClickListener }
-            val dateStr = if (withDate) keyDate(chosen) else null
-            onSave(lbl, amt, dateStr)
+            onSave(lbl, amt, if (withDate) keyDate(chosen) else null)
             dialog.dismiss()
         }
         if (onDelete != null) {
@@ -323,10 +352,7 @@ class MainActivity : AppCompatActivity() {
                 AlertDialog.Builder(this)
                     .setTitle(R.string.delete_confirm_title)
                     .setMessage(R.string.delete_confirm_msg)
-                    .setPositiveButton(R.string.delete) { _, _ ->
-                        onDelete()
-                        dialog.dismiss()
-                    }
+                    .setPositiveButton(R.string.delete) { _, _ -> onDelete(); dialog.dismiss() }
                     .setNegativeButton(R.string.cancel, null)
                     .show()
             }
@@ -338,11 +364,9 @@ class MainActivity : AppCompatActivity() {
     private fun defaultDateForMonth(): String {
         val now = Calendar.getInstance()
         val thisKey = keyOf(now.get(Calendar.YEAR), now.get(Calendar.MONTH))
-        return if (thisKey == currentKey) {
-            keyOf(now.get(Calendar.YEAR), now.get(Calendar.MONTH)) + String.format(Locale.US, "-%02d", now.get(Calendar.DAY_OF_MONTH))
-        } else {
-            "$currentKey-01"
-        }
+        return if (thisKey == currentKey)
+            currentKey + String.format(Locale.US, "-%02d", now.get(Calendar.DAY_OF_MONTH))
+        else "$currentKey-01"
     }
 
     private fun keyDate(c: Calendar): String =
@@ -374,8 +398,6 @@ class MainActivity : AppCompatActivity() {
         euroFormat.maximumFractionDigits = 2
         return "${euroFormat.format(rounded)} €"
     }
-
-    // ---------- Utilitaires ----------
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
     private fun toast(res: Int) = Toast.makeText(this, res, Toast.LENGTH_SHORT).show()
