@@ -556,7 +556,27 @@ if("serviceWorker" in navigator){
   window.addEventListener("load", function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); });
 }
 
+// ---------- Import via lien (#import=...) ----------
+function tryImportFromHash(){
+  var h = location.hash || "";
+  var m = h.match(/[#&]import=([^&]+)/);
+  if(!m) return;
+  try{
+    var json = decodeURIComponent(escape(atob(decodeURIComponent(m[1]))));
+    var obj = JSON.parse(json);
+    if(obj && obj.months){
+      if(confirm("Importer ce budget ? Les mois concernés remplaceront ceux déjà présents sur ce téléphone.")){
+        Object.keys(obj.months).forEach(function(k){ store.months[k] = obj.months[k]; });
+        saveAll();
+        data = monthData();
+      }
+    }
+  }catch(e){ alert("Lien d'import invalide ou incomplet."); }
+  try{ history.replaceState(null, "", location.pathname + location.search); }catch(e){}
+}
+
 // ---------- Démarrage ----------
+tryImportFromHash();
 render();
 if(getPinHash()!==null) lock();
 </script>
