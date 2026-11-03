@@ -174,9 +174,6 @@
   <button class="add" id="addPunctual">+ Ajouter une dépense</button>
   <div class="spacer"></div>
 
-  <!-- Liste de libellés pour les dépenses -->
-  <datalist id="labelOptions"></datalist>
-
   <!-- Modale générique -->
   <div class="overlay" id="overlay">
     <div class="modal">
@@ -582,7 +579,13 @@ pinRemove.addEventListener("click", async function(){
 
 // ---------- Service worker (hors ligne) ----------
 if("serviceWorker" in navigator){
-  window.addEventListener("load", function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); });
+  var swReloaded = false;
+  navigator.serviceWorker.addEventListener("controllerchange", function(){
+    if(swReloaded) return; swReloaded = true; location.reload();
+  });
+  window.addEventListener("load", function(){
+    navigator.serviceWorker.register("sw.js").then(function(reg){ reg.update(); }).catch(function(){});
+  });
 }
 
 // ---------- Import via lien (#import=...) ----------
