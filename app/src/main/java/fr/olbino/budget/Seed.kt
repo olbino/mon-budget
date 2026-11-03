@@ -4,6 +4,32 @@ package fr.olbino.budget
  *  Utilisées uniquement si l'app ne contient encore aucun mois enregistré. */
 object Seed {
 
+    /** Libellés proposés dans la liste déroulante des dépenses ponctuelles. */
+    val expenseLabels: List<String> = listOf(
+        "Essence",
+        "Péage / Tunnel",
+        "Courses",
+        "Restaurant",
+        "Camping",
+        "Carte SIM",
+        "Cartouches",
+        "AliExpress",
+        "Temu",
+        "Amazon",
+        "Droits de douane",
+        "Nom de domaine",
+        "OVH Cloud",
+        "Inscription course",
+        "Cartes de visite",
+        "Recommandé",
+        "Coiffeur",
+        "Pharmacie / Santé",
+        "Vêtements",
+        "Cadeau",
+        "Loisirs",
+        "Divers"
+    )
+
     private val fixedCharges: List<Pair<String, Double>> = listOf(
         "PayPal – Aliexpress" to 27.40,
         "PayPal – Aliexpress (2)" to 7.93,

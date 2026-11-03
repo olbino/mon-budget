@@ -6,6 +6,8 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
+import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
@@ -286,7 +288,7 @@ class MainActivity : AppCompatActivity() {
             onSave = { label, amount, date ->
                 data.punctual.add(Punctual(label = label, amount = amount, date = date ?: defaultDateForMonth()))
                 persist(); render()
-            }, onDelete = null)
+            }, onDelete = null, suggestions = Seed.expenseLabels)
     }
 
     private fun editPunctual(p: Punctual) {
@@ -294,7 +296,8 @@ class MainActivity : AppCompatActivity() {
             onSave = { label, amount, date ->
                 p.label = label; p.amount = amount; if (date != null) p.date = date; persist(); render()
             },
-            onDelete = { data.punctual.remove(p); persist(); render() })
+            onDelete = { data.punctual.remove(p); persist(); render() },
+            suggestions = Seed.expenseLabels)
     }
 
     // ---------- Boîte de dialogue générique ----------
@@ -306,13 +309,26 @@ class MainActivity : AppCompatActivity() {
         withDate: Boolean,
         dateKey: String?,
         onSave: (String, Double, String?) -> Unit,
-        onDelete: (() -> Unit)?
+        onDelete: (() -> Unit)?,
+        suggestions: List<String>? = null
     ) {
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_item, null)
-        val labelInput = view.findViewById<EditText>(R.id.labelInput)
+        val labelInput = view.findViewById<AutoCompleteTextView>(R.id.labelInput)
         val amountInput = view.findViewById<EditText>(R.id.amountInput)
         val dateRow = view.findViewById<View>(R.id.dateRow)
         val dateButton = view.findViewById<Button>(R.id.dateButton)
+
+        if (!suggestions.isNullOrEmpty()) {
+            labelInput.setAdapter(ArrayAdapter(this, android.R.layout.simple_list_item_1, suggestions))
+            // Afficher toute la liste au clic, même champ vide
+            labelInput.setOnClickListener { labelInput.showDropDown() }
+            labelInput.onFocusChangeListener = View.OnFocusChangeListener { v, hasFocus ->
+                if (hasFocus) (v as AutoCompleteTextView).showDropDown()
+            }
+        } else {
+            // Pas de liste : masquer la flèche déroulante
+            labelInput.setCompoundDrawables(null, null, null, null)
+        }
 
         labelInput.setText(label)
         if (amount != null) amountInput.setText(trimNumber(amount))

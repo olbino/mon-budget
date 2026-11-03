@@ -7,13 +7,16 @@
     android:paddingRight="24dp"
     android:paddingTop="8dp">
 
-    <EditText
+    <AutoCompleteTextView
         android:id="@+id/labelInput"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:hint="@string/label_hint"
         android:inputType="textCapSentences"
-        android:maxLines="1" />
+        android:maxLines="1"
+        android:completionThreshold="1"
+        android:drawableEnd="@android:drawable/arrow_down_float"
+        android:drawablePadding="8dp" />
 
     <EditText
         android:id="@+id/amountInput"
