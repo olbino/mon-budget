@@ -116,6 +116,16 @@
     color:#fff;padding:8px 0 8px 18px;}
   .pininput:focus{outline:none;}
   .lockerr{color:#ffd7d7;margin-top:14px;font-size:14px;min-height:18px;}
+
+  /* Liste déroulante maison (libellés) */
+  #mLabelField{position:relative;}
+  .suggest{position:absolute;left:0;right:0;top:100%;z-index:5;background:#fff;
+    border:1px solid #D7DBE0;border-radius:12px;margin-top:4px;max-height:210px;
+    overflow-y:auto;box-shadow:0 10px 24px rgba(0,0,0,.18);display:none;-webkit-overflow-scrolling:touch;}
+  .suggest.open{display:block;}
+  .suggest .opt{padding:12px 14px;font-size:16px;cursor:pointer;border-bottom:1px solid var(--divider);}
+  .suggest .opt:last-child{border-bottom:none;}
+  .suggest .opt:active{background:#EFF4F2;}
 </style>
 </head>
 <body>
@@ -174,6 +184,7 @@
       <div class="field" id="mLabelField">
         <label for="mLabel">Libellé</label>
         <input id="mLabel" type="text" autocomplete="off" placeholder="ex. Freebox" />
+        <div class="suggest" id="labelSuggest"></div>
       </div>
       <div class="field">
         <label for="mAmount">Montant (€)</label>
@@ -395,11 +406,28 @@ var mTitle=document.getElementById("mTitle"), mLabel=document.getElementById("mL
     mErr=document.getElementById("mErr"), mDelete=document.getElementById("mDelete"),
     mSave=document.getElementById("mSave"), mCancel=document.getElementById("mCancel");
 
-// remplir la datalist
-(function(){
-  var dl = document.getElementById("labelOptions");
-  EXPENSE_LABELS.forEach(function(x){ var o=document.createElement("option"); o.value=x; dl.appendChild(o); });
-})();
+// ---------- Liste déroulante maison (libellés des dépenses) ----------
+var labelSuggest = document.getElementById("labelSuggest");
+var suggestActive = false;
+function norm(s){ return (s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,""); }
+function hideSuggest(){ labelSuggest.classList.remove("open"); labelSuggest.innerHTML=""; }
+function renderSuggest(){
+  if(!suggestActive){ hideSuggest(); return; }
+  var q = norm(mLabel.value);
+  var matches = EXPENSE_LABELS.filter(function(x){ return norm(x).indexOf(q) !== -1; });
+  // si l'unique correspondance est déjà saisie, inutile d'afficher
+  if(matches.length===0 || (matches.length===1 && norm(matches[0])===q)){ hideSuggest(); return; }
+  labelSuggest.innerHTML = "";
+  matches.forEach(function(x){
+    var d = document.createElement("div"); d.className="opt"; d.textContent=x;
+    d.addEventListener("mousedown", function(ev){ ev.preventDefault(); mLabel.value=x; hideSuggest(); });
+    labelSuggest.appendChild(d);
+  });
+  labelSuggest.classList.add("open");
+}
+mLabel.addEventListener("focus", renderSuggest);
+mLabel.addEventListener("input", renderSuggest);
+mLabel.addEventListener("blur", function(){ setTimeout(hideSuggest, 150); });
 
 function todayInMonth(){
   var t = new Date();
@@ -416,8 +444,9 @@ function openModal(opts){
   else{
     mLabelField.style.display="flex";
     mLabel.value = opts.label||"";
-    if(opts.suggest){ mLabel.setAttribute("list","labelOptions"); mLabel.placeholder="ex. Essence"; }
-    else{ mLabel.removeAttribute("list"); mLabel.placeholder="ex. Freebox"; }
+    suggestActive = !!opts.suggest;
+    mLabel.placeholder = suggestActive ? "ex. Essence (ou tapez le vôtre)" : "ex. Freebox";
+    hideSuggest();
   }
   // montant
   mAmount.value = (opts.amount!=null)? String(opts.amount).replace(".",",") : "";
