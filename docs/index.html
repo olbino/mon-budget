@@ -101,6 +101,9 @@
   .btn.cancel{background:#EEF0F2;color:#333;}
   .btn.save{background:var(--primary);color:#fff;}
   .err{color:var(--negative);font-size:13px;margin-top:-8px;margin-bottom:10px;display:none;}
+  .chkline{display:flex;align-items:center;gap:10px;font-size:15px;color:var(--text);cursor:pointer;}
+  .chkline input{width:20px;height:20px;}
+  #mInstCountWrap label{font-size:13px;color:var(--muted);margin-bottom:5px;display:block;}
 
   /* Verrou */
   .toprow{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
@@ -184,8 +187,15 @@
         <div class="suggest" id="labelSuggest"></div>
       </div>
       <div class="field">
-        <label for="mAmount">Montant (€)</label>
+        <label for="mAmount" id="mAmountLabel">Montant (€)</label>
         <input id="mAmount" type="text" inputmode="decimal" placeholder="0" />
+      </div>
+      <div class="field" id="mInstField" style="display:none">
+        <label class="chkline"><input type="checkbox" id="mInstCheck" /> Paiement en plusieurs fois</label>
+        <div id="mInstCountWrap" style="display:none;margin-top:10px;">
+          <label for="mInstCount">Nombre de mensualités</label>
+          <input id="mInstCount" type="text" inputmode="numeric" placeholder="ex. 4" />
+        </div>
       </div>
       <div class="field" id="mDateField">
         <label for="mDate">Date</label>
@@ -286,7 +296,9 @@ function carry(key){
   var m = {salary:0, fixed:[], punctual:[]};
   if(base){
     m.salary = base.salary;
-    m.fixed = base.fixed.map(function(f){ return {id:uid(),label:f.label,amount:f.amount,paid:false}; });
+    // On ne reporte que les charges normales ; les mensualités sont placées explicitement.
+    m.fixed = base.fixed.filter(function(f){ return !f.inst; })
+                        .map(function(f){ return {id:uid(),label:f.label,amount:f.amount,paid:false}; });
   }
   return m;
 }
@@ -353,7 +365,8 @@ function renderFixed(){
     var cb = document.createElement("input");
     cb.type="checkbox"; cb.className="cb"; cb.checked=f.paid;
     cb.addEventListener("click", function(ev){ ev.stopPropagation(); f.paid=cb.checked; persist(); render(); });
-    var lbl = document.createElement("div"); lbl.className="lbl"; lbl.textContent=f.label;
+    var lbl = document.createElement("div"); lbl.className="lbl";
+    lbl.textContent = f.inst ? (f.label + " (" + f.instIndex + "/" + f.inst + ")") : f.label;
     var amt = document.createElement("div"); amt.className="amt"; amt.textContent=money(f.amount);
     row.appendChild(cb); row.appendChild(lbl); row.appendChild(amt);
     row.addEventListener("click", function(){ editFixed(f); });
@@ -401,7 +414,12 @@ var mTitle=document.getElementById("mTitle"), mLabel=document.getElementById("mL
     mAmount=document.getElementById("mAmount"), mDate=document.getElementById("mDate"),
     mDateField=document.getElementById("mDateField"), mLabelField=document.getElementById("mLabelField"),
     mErr=document.getElementById("mErr"), mDelete=document.getElementById("mDelete"),
-    mSave=document.getElementById("mSave"), mCancel=document.getElementById("mCancel");
+    mSave=document.getElementById("mSave"), mCancel=document.getElementById("mCancel"),
+    mInstField=document.getElementById("mInstField"), mInstCheck=document.getElementById("mInstCheck"),
+    mInstCountWrap=document.getElementById("mInstCountWrap"), mInstCount=document.getElementById("mInstCount");
+mInstCheck.addEventListener("change", function(){
+  mInstCountWrap.style.display = mInstCheck.checked ? "block" : "none";
+});
 
 // ---------- Liste déroulante maison (libellés des dépenses) ----------
 var labelSuggest = document.getElementById("labelSuggest");
@@ -432,7 +450,7 @@ function todayInMonth(){
   return currentKey+"-01";
 }
 
-var modalSave=null, modalDelete=null;
+var modalSave=null, modalDelete=null, modalDeleteMsg="Supprimer cette ligne ?";
 function openModal(opts){
   mTitle.textContent = opts.title;
   mErr.style.display="none";
@@ -447,12 +465,20 @@ function openModal(opts){
   }
   // montant
   mAmount.value = (opts.amount!=null)? String(opts.amount).replace(".",",") : "";
+  // paiement en plusieurs fois (uniquement à la création d'une charge fixe)
+  if(opts.installment){
+    mInstField.style.display="flex";
+    mInstCheck.checked=false; mInstCountWrap.style.display="none"; mInstCount.value="";
+  } else {
+    mInstField.style.display="none";
+  }
   // date
   if(opts.withDate){ mDateField.style.display="flex"; mDate.value = opts.date || todayInMonth(); }
   else{ mDateField.style.display="none"; }
   // suppression
   if(opts.onDelete){ mDelete.style.display="inline-block"; } else { mDelete.style.display="none"; }
   modalSave = opts.onSave; modalDelete = opts.onDelete;
+  modalDeleteMsg = opts.deleteMsg || "Supprimer cette ligne ?";
   overlay.classList.add("open");
   setTimeout(function(){ if(!opts.labelHidden) mLabel.focus(); else mAmount.focus(); }, 50);
 }
@@ -468,11 +494,17 @@ mSave.addEventListener("click", function(){
   if(!labelHidden && lbl===""){ showErr("Indiquez un libellé."); return; }
   if(amt===null){ showErr("Indiquez un montant valide."); return; }
   var date = (mDateField.style.display!=="none") ? mDate.value : null;
-  if(modalSave) modalSave(lbl, amt, date);
+  var inst = null;
+  if(mInstField.style.display!=="none" && mInstCheck.checked){
+    var n = parseInt((mInstCount.value||"").trim(), 10);
+    if(!(n>=2)){ showErr("Indiquez un nombre de mensualités (2 minimum)."); return; }
+    inst = n;
+  }
+  if(modalSave) modalSave(lbl, amt, date, inst);
   closeModal();
 });
 mDelete.addEventListener("click", function(){
-  if(modalDelete && confirm("Supprimer cette ligne ?")){ modalDelete(); closeModal(); }
+  if(modalDelete && confirm(modalDeleteMsg)){ modalDelete(); closeModal(); }
 });
 function showErr(m){ mErr.textContent=m; mErr.style.display="block"; }
 
@@ -487,14 +519,72 @@ document.getElementById("salaryStat").addEventListener("click", function(){
 
 // ---------- Charges fixes ----------
 document.getElementById("addFixed").addEventListener("click", function(){
-  openModal({ title:"Nouvelle charge fixe", suggest:false, withDate:false,
-    onSave:function(lbl,amt){ data.fixed.push({id:uid(),label:lbl,amount:amt,paid:false}); persist(); render(); }
+  openModal({ title:"Nouvelle charge fixe", suggest:false, withDate:false, installment:true,
+    onSave:function(lbl,amt,_,inst){
+      if(inst){ addInstallments(lbl, amt, inst); }
+      else { data.fixed.push({id:uid(),label:lbl,amount:amt,paid:false}); persist(); render(); }
+    }
   });
 });
+
+// Décale une clé de mois de k mois.
+function monthKeyOffset(key, k){
+  return keyOf(new Date(yearOf(key), month0(key)+k, 1));
+}
+// Crée une charge en plusieurs fois : une échéance sur ce mois et les suivants.
+function addInstallments(label, amount, n){
+  store.months[currentKey] = data;          // s'assurer que le mois courant est enregistré
+  var gid = uid();
+  for(var k=0;k<n;k++){
+    var key = monthKeyOffset(currentKey, k);
+    var md = store.months[key] ? store.months[key] : carry(key);
+    md.fixed.push({id:uid(), label:label, amount:amount, paid:false, inst:n, instIndex:k+1, gid:gid});
+    store.months[key] = md;
+  }
+  saveAll();
+  data = store.months[currentKey];
+  render();
+}
+// Supprime une série d'échéances à partir du mois courant (mois passés conservés).
+function removeInstallmentSeries(gid){
+  var keys = Object.keys(store.months);
+  keys.forEach(function(key){
+    if(key >= currentKey){
+      var md = store.months[key];
+      md.fixed = md.fixed.filter(function(f){ return f.gid !== gid; });
+      store.months[key] = md;
+    }
+  });
+  saveAll();
+  data = store.months[currentKey];
+  render();
+}
+function updateInstallmentSeries(gid, label, amount){
+  Object.keys(store.months).forEach(function(key){
+    if(key >= currentKey){
+      store.months[key].fixed.forEach(function(f){
+        if(f.gid===gid){ f.label=label; f.amount=amount; }
+      });
+    }
+  });
+  saveAll();
+  data = store.months[currentKey];
+  render();
+}
 function editFixed(f){
-  openModal({ title:"Modifier la charge fixe", suggest:false, label:f.label, amount:f.amount, withDate:false,
-    onSave:function(lbl,amt){ f.label=lbl; f.amount=amt; persist(); render(); },
-    onDelete:function(){ data.fixed = data.fixed.filter(function(x){return x!==f;}); persist(); render(); }
+  var isInst = !!f.inst;
+  openModal({
+    title: isInst ? "Modifier la mensualité" : "Modifier la charge fixe",
+    suggest:false, label:f.label, amount:f.amount, withDate:false,
+    deleteMsg: isInst ? "Retirer ce paiement en plusieurs fois (cette échéance et les suivantes) ?" : "Supprimer cette ligne ?",
+    onSave:function(lbl,amt){
+      if(isInst && f.gid){ updateInstallmentSeries(f.gid, lbl, amt); }
+      else { f.label=lbl; f.amount=amt; persist(); render(); }
+    },
+    onDelete:function(){
+      if(isInst && f.gid){ removeInstallmentSeries(f.gid); }
+      else { data.fixed = data.fixed.filter(function(x){return x!==f;}); persist(); render(); }
+    }
   });
 }
 
